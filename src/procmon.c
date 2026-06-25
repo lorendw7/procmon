@@ -1,5 +1,6 @@
 /*
- * procmon - a tiny process monitor for Linux / WSL  [EXERCISE / FILL-IN VERSION]
+ * procmon - a tiny process monitor for Linux / WSL  [EXERCISE / FILL-IN
+ * VERSION]
  * -----------------------------------------------------------------------------
  * Your job: complete every block marked with  >>> TODO n <<<
  *
@@ -8,40 +9,45 @@
  * blanked out for you to write.
  *
  * Read EXERCISE.md for step-by-step hints in Chinese + English.
- * Reference solution lives in ../solution/procmon_solution.c (peek only if stuck).
+ * Reference solution lives in ../solution/procmon_solution.c (peek only if
+ * stuck).
  *
  * Build:  make
  * Run:    ./procmon -1 -n 8     (single snapshot, top 8 — good for testing)
  */
 
 #define _GNU_SOURCE
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
 #include <ctype.h>
 #include <dirent.h>
 #include <pwd.h>
 #include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 #define MAX_PROCS 4096
 
 /* One process as we present it to the user. */
 typedef struct {
-    int   pid;
-    char  comm[256];                /* command name                         */
-    char  state;                    /* R, S, D, Z, T ...                    */
-    char  user[64];                 /* owner user name                      */
-    long  rss_kb;                   /* resident set size in KB              */
+    int pid;
+    char comm[256];                 /* command name                         */
+    char state;                     /* R, S, D, Z, T ...                    */
+    char user[64];                  /* owner user name                      */
+    long rss_kb;                    /* resident set size in KB              */
     unsigned long long cpu_jiffies; /* utime + stime at sample time         */
     double cpu_percent;             /* %CPU computed between two samples     */
 } Proc;
 
 static Proc prev[MAX_PROCS];
-static int  prev_count = 0;
+static int prev_count = 0;
 
 static volatile sig_atomic_t running = 1;
-static void on_sigint(int sig) { (void)sig; running = 0; }
+static void on_sigint(int sig)
+{
+    (void)sig;
+    running = 0;
+}
 
 /* -------------------------------------------------------------------------
  * >>> TODO 1 <<<  Total CPU time across all cores.
@@ -57,15 +63,32 @@ static void on_sigint(int sig) { (void)sig; running = 0; }
 static unsigned long long read_total_cpu_jiffies(void)
 {
     /* TODO 1: replace the line below with your implementation */
-    return 0;
+    FILE *f = fopen("/proc/stat", "r");
+    if (!f)
+        return 0;
+
+    char label[16];
+    unsigned long long total = 0, v;
+    if (fscanf(f, "%15s", label) != 1) {
+        fclose(f);
+        return 0;
+    }
+
+    while (fscanf(f, "%llu", &v) == 1) {
+        total += v;
+    }
+    fclose(f);
+    return total;
 }
 
 /* Resolve a numeric uid into a user name (given — study it). */
 static void uid_to_name(uid_t uid, char *out, size_t n)
 {
     struct passwd *pw = getpwuid(uid);
-    if (pw) snprintf(out, n, "%s", pw->pw_name);
-    else    snprintf(out, n, "%u", uid);
+    if (pw)
+        snprintf(out, n, "%s", pw->pw_name);
+    else
+        snprintf(out, n, "%u", uid);
 }
 
 /* -------------------------------------------------------------------------
@@ -80,8 +103,12 @@ static int read_proc(int pid, Proc *p)
     /* ---- /proc/<pid>/stat : read the whole single line into buf ---- */
     snprintf(path, sizeof(path), "/proc/%d/stat", pid);
     FILE *f = fopen(path, "r");
-    if (!f) return 0;
-    if (!fgets(buf, sizeof(buf), f)) { fclose(f); return 0; }
+    if (!f)
+        return 0;
+    if (!fgets(buf, sizeof(buf), f)) {
+        fclose(f);
+        return 0;
+    }
     fclose(f);
 
     /* ---------------------------------------------------------------------
@@ -96,14 +123,16 @@ static int read_proc(int pid, Proc *p)
      * Copy that text into p->comm (watch the buffer size!), null-terminate it.
      * If either parenthesis is missing, return 0.
      * --------------------------------------------------------------------- */
-    char *lp = NULL, *rp = NULL;   /* TODO 2: set these and copy the name   */
+    char *lp = NULL, *rp = NULL; /* TODO 2: set these and copy the name   */
     /* ... your code here ... */
 
     lp = strchr(buf, '(');
     rp = strrchr(buf, ')');
-    if (!lp || !rp || lp >= rp) return 0;
+    if (!lp || !rp || lp >= rp)
+        return 0;
     size_t len = rp - lp - 1;
-    if (len > sizeof(p->comm) - 1) len = sizeof(p->comm) - 1;
+    if (len > sizeof(p->comm) - 1)
+        len = sizeof(p->comm) - 1;
     memcpy(p->comm, lp + 1, len);
     p->comm[len] = '\0';
 
@@ -126,19 +155,19 @@ static int read_proc(int pid, Proc *p)
     char *rest = rp + 2;
     int field = 3;
     unsigned long long utime = 0, stime = 0;
-    for (char *tok = strtok(rest, " "); tok != NULL; tok = strtok(NULL, " "), field++) {
+    for (char *tok = strtok(rest, " "); tok != NULL;
+         tok = strtok(NULL, " "), field++) {
         if (field == 3) {
-            p->state = tok[0];               
+            p->state = tok[0];
         } else if (field == 14) {
-            utime = strtoull(tok,
-            NULL, 10);
+            utime = strtoull(tok, NULL, 10);
         } else if (field == 15) {
             stime = strtoull(tok, NULL, 10);
             break;
         }
     }
 
-    p->cpu_jiffies = utime + stime;            /* TODO 3: utime + stime                  */
+    p->cpu_jiffies = utime + stime; /* TODO 3: utime + stime                  */
 
     /* ---------------------------------------------------------------------
      * >>> TODO 4 <<<  Read memory + owner from /proc/<pid>/status.
@@ -151,29 +180,26 @@ static int read_proc(int pid, Proc *p)
      *       sscanf(buf + 6, "%ld", &p->rss_kb);
      * --------------------------------------------------------------------- */
 
-     p->rss_kb = 0;
-     p->user[0] = '\0';
+    p->rss_kb = 0;
+    p->user[0] = '\0';
     snprintf(path, sizeof(path), "/proc/%d/status", pid);
     FILE *sf = fopen(path, "r");
-   if (sf)
-   {
-     while (fgets(buf, sizeof(buf), sf)) {
-        if (strncmp(buf, "VmRSS:", 6) == 0) {
-            sscanf(buf + 6, "%ld", &p->rss_kb);
+    if (sf) {
+        while (fgets(buf, sizeof(buf), sf)) {
+            if (strncmp(buf, "VmRSS:", 6) == 0) {
+                sscanf(buf + 6, "%ld", &p->rss_kb);
+            }
+            if (strncmp(buf, "Uid:", 4) == 0) {
+                int uid;
+                sscanf(buf + 4, "%d", &uid);
+                uid_to_name(uid, p->user, sizeof(p->user));
+            }
         }
-        if (strncmp(buf, "Uid:", 4) == 0)
-        {
-            int uid;
-            sscanf(buf + 4, "%d", &uid);
-            uid_to_name(uid, p->user, sizeof(p->user));
-        }
-        
+        fclose(sf);
     }
-    fclose(sf);
-   }
-   
 
-    if (p->user[0] == '\0') snprintf(p->user, sizeof(p->user), "?");
+    if (p->user[0] == '\0')
+        snprintf(p->user, sizeof(p->user), "?");
     p->cpu_percent = 0.0;
     return 1;
 }
@@ -182,7 +208,8 @@ static int read_proc(int pid, Proc *p)
 static int find_prev(int pid)
 {
     for (int i = 0; i < prev_count; i++)
-        if (prev[i].pid == pid) return i;
+        if (prev[i].pid == pid)
+            return i;
     return -1;
 }
 
@@ -206,23 +233,30 @@ int main(int argc, char **argv)
 
     /* ---- option parsing (given) ---- */
     for (int i = 1; i < argc; i++) {
-        if      (strcmp(argv[i], "-m") == 0) by_mem = 1;
-        else if (strcmp(argv[i], "-1") == 0) once = 1;
-        else if (strcmp(argv[i], "-d") == 0 && i + 1 < argc) delay = atoi(argv[++i]);
-        else if (strcmp(argv[i], "-n") == 0 && i + 1 < argc) top_n = atoi(argv[++i]);
+        if (strcmp(argv[i], "-m") == 0)
+            by_mem = 1;
+        else if (strcmp(argv[i], "-1") == 0)
+            once = 1;
+        else if (strcmp(argv[i], "-d") == 0 && i + 1 < argc)
+            delay = atoi(argv[++i]);
+        else if (strcmp(argv[i], "-n") == 0 && i + 1 < argc)
+            top_n = atoi(argv[++i]);
         else {
-            fprintf(stderr,
-                "Usage: %s [-d seconds] [-n count] [-m] [-1]\n", argv[0]);
+            fprintf(stderr, "Usage: %s [-d seconds] [-n count] [-m] [-1]\n",
+                    argv[0]);
             return 1;
         }
     }
-    if (delay < 1) delay = 1;
-    if (top_n < 1) top_n = 1;
+    if (delay < 1)
+        delay = 1;
+    if (top_n < 1)
+        top_n = 1;
 
     signal(SIGINT, on_sigint);
 
     long hz = sysconf(_SC_CLK_TCK);
-    if (hz <= 0) hz = 100;
+    if (hz <= 0)
+        hz = 100;
 
     Proc cur[MAX_PROCS];
     unsigned long long prev_total = read_total_cpu_jiffies();
@@ -241,7 +275,8 @@ int main(int argc, char **argv)
         int count = 0;
         /* ... your /proc scan here, filling cur[] and count ... */
         DIR *dir = opendir("/proc");
-        if (!dir) break;
+        if (!dir)
+            break;
         struct dirent *de;
         while ((de = readdir(dir)) && count < MAX_PROCS) {
             if (!isdigit((unsigned char)de->d_name[0])) {
@@ -249,18 +284,17 @@ int main(int argc, char **argv)
             }
 
             int pid = atoi(de->d_name);
-            if (read_proc(pid, &cur[count]) == 1)
-            {
+            if (read_proc(pid, &cur[count]) == 1) {
                 count++;
             }
-            
         }
         closedir(dir);
         /* ---- compute %CPU using delta against the previous sample ---- */
         unsigned long long total = read_total_cpu_jiffies();
         unsigned long long total_delta = total - prev_total;
         long ncpu = sysconf(_SC_NPROCESSORS_ONLN);
-        if (ncpu < 1) ncpu = 1;
+        if (ncpu < 1)
+            ncpu = 1;
 
         for (int i = 0; i < count; i++) {
             int j = find_prev(cur[i].pid);
@@ -274,24 +308,28 @@ int main(int argc, char **argv)
                  * cur[i].cpu_percent =
                  *     100.0 * (double)dj / (double)total_delta * ncpu;
                  * --------------------------------------------------------- */
-                cur[i].cpu_percent = 0.0;   /* TODO 6: real formula */
+                unsigned long long dj =
+                    cur[i].cpu_jiffies - prev[j].cpu_jiffies;
+                cur[i].cpu_percent =
+                    100 * (double)dj / (double)total_delta * ncpu;
             }
         }
 
         qsort(cur, count, sizeof(Proc), by_mem ? cmp_mem : cmp_cpu);
 
         /* ---- printing (given) ---- */
-        if (!once) printf("\033[H\033[J");
+        if (!once)
+            printf("\033[H\033[J");
         printf("procmon - %d processes - sorted by %s - HZ=%ld cores=%ld\n",
                count, by_mem ? "MEM" : "CPU", hz, ncpu);
-        printf("%-8s %-12s %-2s %6s %12s  %s\n",
-               "PID", "USER", "S", "%CPU", "RSS(KB)", "COMMAND");
+        printf("%-8s %-12s %-2s %6s %12s  %s\n", "PID", "USER", "S", "%CPU",
+               "RSS(KB)", "COMMAND");
 
         int shown = count < top_n ? count : top_n;
         for (int i = 0; i < shown; i++) {
-            printf("%-8d %-12.12s %c  %6.1f %12ld  %s\n",
-                   cur[i].pid, cur[i].user, cur[i].state,
-                   cur[i].cpu_percent, cur[i].rss_kb, cur[i].comm);
+            printf("%-8d %-12.12s %c  %6.1f %12ld  %s\n", cur[i].pid,
+                   cur[i].user, cur[i].state, cur[i].cpu_percent, cur[i].rss_kb,
+                   cur[i].comm);
         }
         fflush(stdout);
 
@@ -299,10 +337,12 @@ int main(int argc, char **argv)
         prev_count = count;
         prev_total = total;
 
-        if (once) break;
+        if (once)
+            break;
         sleep(delay);
     } while (running);
 
-    if (!once) printf("\nStopped.\n");
+    if (!once)
+        printf("\nStopped.\n");
     return 0;
 }
