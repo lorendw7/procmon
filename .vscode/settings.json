@@ -1,0 +1,11 @@
+{
+  // 保存文件时自动格式化
+  "editor.formatOnSave": true,
+  // C/C++ 文件用微软 C/C++ 扩展来格式化
+  "[c]": {
+    "editor.defaultFormatter": "ms-vscode.cpptools"
+  },
+  // 让 clang-format 读取项目根目录的 .clang-format 文件
+  "C_Cpp.formatting": "clangFormat",
+  "C_Cpp.clang_format_style": "file"
+}

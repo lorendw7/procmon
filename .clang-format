@@ -1,0 +1,12 @@
+# procmon 代码风格 —— clang-format 规则
+# 想换风格把 BasedOnStyle 改成 Google / Mozilla / WebKit 试试效果
+BasedOnStyle: LLVM
+IndentWidth: 4          # 缩进 4 个空格
+TabWidth: 4
+UseTab: Never           # 用空格，不用 Tab
+ColumnLimit: 80         # 每行最多 80 字符，超了自动换行
+BreakBeforeBraces: Linux   # 函数的 { 另起一行，控制语句的 { 跟在行尾
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+PointerAlignment: Right    # 写成 char *p 而不是 char* p
+SpaceBeforeParens: ControlStatements   # if (x) 有空格，func(x) 没空格
